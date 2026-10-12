@@ -6,7 +6,7 @@ Only test browser functions while the Tesla is parked. The build verifies compil
 
 **On OPPO**
 
-1. Install `app/build/outputs/apk/debug/app-debug.apk`. If installing by USB, enable developer options and USB debugging, then run `adb install -r app/build/outputs/apk/debug/app-debug.apk` from the repository. You can also transfer the APK to the phone and open it there.
+1. Install `app/build/outputs/apk/debug/app-debug.apk`. For USB installation, enable developer options and USB debugging, connect the OPPO by USB, accept the phone's debugging prompt, then run this command in PowerShell from this workspace: `& '.\.tooling\android-sdk\platform-tools\adb.exe' install -r '.\app\build\outputs\apk\debug\app-debug.apk'`. The local `.tooling` folder contains the SDK installed for this build and is not committed to Git. You can also transfer the APK to the phone and open it there.
 2. Turn on the normal **Personal Hotspot / Wi-Fi hotspot with internet sharing** in ColorOS. Note the phone's Android and ColorOS versions from Settings → About device.
 3. Open **Tesla Hub**, grant notification permission if prompted, and tap **Start local server**.
 4. Wait five seconds. Read **Local Server**, **Fallback address**, **All local addresses**, and **mDNS**. Tap **Copy fallback URL** and paste it into a note if useful. Leave the server running.
