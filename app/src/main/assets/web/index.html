@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="dark">
+  <title>Tesla Hub</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <button class="wordmark" data-view="home" aria-label="Tesla Hub home"><span class="mark">H</span><span>TESLA HUB</span></button>
+      <span id="connection" class="connection">Connecting</span>
+    </header>
+
+    <main>
+      <section id="home" class="view active" aria-labelledby="home-title">
+        <div class="intro"><div><p class="eyebrow">LOCAL LAUNCHER</p><h1 id="home-title">Your drive, one screen.</h1></div><span class="small-note">Phone hotspot · Tesla browser</span></div>
+        <div class="launcher">
+          <button class="tile tile-wide tile-primary" id="android-auto"><span class="tile-copy"><span class="tile-kicker">COMING IN PHASE 3</span><strong>Android Auto</strong><small>Waze, maps and compatible apps</small></span><span class="tile-arrow">↗</span></button>
+          <button class="tile" id="stremio"><span class="tile-copy"><span class="tile-kicker">WEB</span><strong>Stremio</strong><small>Open Stremio Web</small></span><span class="tile-arrow">↗</span></button>
+          <button class="tile" id="rtp"><span class="tile-copy"><span class="tile-kicker">WEB</span><strong>RTP Play</strong><small>Open RTP Play</small></span><span class="tile-arrow">↗</span></button>
+          <button class="tile tile-wide" id="vodafone"><span class="tile-copy"><span class="tile-kicker">COMPATIBILITY CHECK</span><strong>Vodafone TV</strong><small>Inspect browser support, then open TV</small></span><span class="tile-arrow">→</span></button>
+          <button class="tile tile-utility" data-view="settings"><span class="tile-copy"><strong>Settings</strong><small>Website destinations</small></span><span class="tile-arrow">→</span></button>
+          <button class="tile tile-utility" data-view="diagnostics"><span class="tile-copy"><strong>Diagnostics</strong><small>Browser and network</small></span><span class="tile-arrow">→</span></button>
+        </div>
+      </section>
+
+      <section id="settings" class="view" aria-labelledby="settings-title">
+        <div class="section-heading"><button class="back" data-view="home">← Home</button><div><p class="eyebrow">PREFERENCES</p><h1 id="settings-title">Settings</h1></div></div>
+        <div class="panel form-panel">
+          <p>Website destinations are stored only in this browser. Direct opening is the Phase 1 fallback; Tesla Theater fullscreen is unverified.</p>
+          <label for="stremio-url">STREMIO_URL</label><input id="stremio-url" type="url" spellcheck="false" autocomplete="off">
+          <label for="rtp-url">RTP_PLAY_URL</label><input id="rtp-url" type="url" spellcheck="false" autocomplete="off">
+          <label for="vodafone-url">VODAFONE_TV_URL</label><input id="vodafone-url" type="url" spellcheck="false" autocomplete="off">
+          <div class="actions"><button class="action" id="save-settings">Save destinations</button><button class="action secondary" id="reset-settings">Reset defaults</button></div>
+          <p id="settings-result" role="status"></p>
+        </div>
+      </section>
+
+      <section id="diagnostics" class="view" aria-labelledby="diagnostics-title">
+        <div class="section-heading"><button class="back" data-view="home">← Home</button><div><p class="eyebrow">LOCAL STATUS</p><h1 id="diagnostics-title">Diagnostics</h1></div><button class="action secondary" id="refresh">Refresh</button></div>
+        <div class="diagnostic-grid">
+          <div class="panel"><h2>Phone and network</h2><dl id="phone-data"></dl></div>
+          <div class="panel"><h2>Tesla browser</h2><dl id="browser-data"></dl></div>
+          <div class="panel"><h2>Browser features</h2><dl id="feature-data"></dl></div>
+          <div class="panel"><h2>Android Auto and stream</h2><dl id="future-data"></dl></div>
+          <div class="panel panel-wide"><div class="panel-heading"><h2>Vodafone TV</h2><button class="action" id="open-vodafone">Open Vodafone TV ↗</button></div><p>The reported WF052 error and black video during phone mirroring may reflect platform support or DRM restrictions. This page checks available browser APIs; it cannot prove that protected playback will work.</p><p id="vodafone-note" class="muted"></p></div>
+          <div class="panel panel-wide"><h2>Share diagnostics</h2><p>The report includes device model, local addresses, browser user agent and capability results. It excludes cookies, account data and credentials.</p><button class="action secondary" id="download-report">Download report</button><p class="muted">The Tesla browser may not support downloads. Read the values here or use the phone status screen if needed.</p></div>
+        </div>
+      </section>
+    </main>
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  </div>
+</body>
+</html>
