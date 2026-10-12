@@ -60,6 +60,23 @@ class LocalHttpServerTest {
         } finally { server.close() }
     }
 
+    @Test fun healthEndpointRespondsThroughTheConfiguredClientPolicy() {
+        val sockets = CopyOnWriteArrayList<ServerSocket>()
+        val errors = CopyOnWriteArrayList<String>()
+        val server = LocalHttpServer(
+            readAsset = { byteArrayOf() }, onExternalConnection = {}, onRequestError = { errors.add(it) },
+            onListenerError = { errors.add(it) }, port = 0,
+            socketFactory = { ServerSocket().also { sockets.add(it) } },
+            allowClient = { remote, _ -> remote == binding.address }
+        )
+        try {
+            server.reconcile(listOf(binding))
+            val result = ServerHealthCheck.check(binding, sockets.single().localPort)
+            assertTrue(result.detail, result.passed)
+            assertTrue(errors.toString(), errors.isEmpty())
+        } finally { server.close() }
+    }
+
     private fun await(condition: () -> Boolean) {
         val deadline = System.nanoTime() + 2_000_000_000
         while (!condition() && System.nanoTime() < deadline) Thread.sleep(10)

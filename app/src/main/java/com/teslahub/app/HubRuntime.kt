@@ -13,6 +13,11 @@ object HubRuntime {
     @Volatile var serverCheckedAt = 0L
     @Volatile var hotspotStatus = "Unknown"
     @Volatile var networkInfo = NetworkDiagnostics.Snapshot()
+    @Volatile var localRouteStatus = "Not started (experimental)"
+    @Volatile var localRouteUrl: String? = null
+    @Volatile var localRoutePackets = 0L
+    @Volatile var localRouteLastPacket = "None"
+    @Volatile var localRouteMonitorError: String? = null
     private val browserLock = Any()
     private var browserReport = JSONObject()
     private var browserLastSeen = 0L
@@ -92,6 +97,11 @@ object HubRuntime {
             put("serverListening", currentAddresses.isNotEmpty())
             put("serverRunning", currentAddresses.isNotEmpty() && serverChecks.any { it.passed })
             put("serverError", serverError)
+            put("localRouteStatus", localRouteStatus)
+            put("localRouteUrl", localRouteUrl ?: JSONObject.NULL)
+            put("localRoutePackets", localRoutePackets)
+            put("localRouteLastPacket", localRouteLastPacket)
+            put("localRouteMonitorError", localRouteMonitorError ?: JSONObject.NULL)
             put("appVersion", BuildConfig.VERSION_NAME)
             put("serverCheckedAt", serverCheckedAt)
             put("serverChecks", org.json.JSONArray().apply {

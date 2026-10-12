@@ -77,6 +77,9 @@
       ['Connections from other devices', state.externalConnectionCount],
       ['Last external client', state.lastExternalClientAddress || 'None'], ['VPN active', state.vpnActive],
       ['Last request error', state.lastRequestError || 'None'],
+      ['Experimental local route', state.localRouteStatus], ['Local route URL', state.localRouteUrl || 'None'],
+      ['Route packets', state.localRoutePackets],
+      ['Last route packet', state.localRouteLastPacket], ['Route monitor error', state.localRouteMonitorError || 'None'],
       ['Interfaces / URLs', addressRows], ['Preferred mDNS URL', state.preferredAddress],
       ['mDNS', state.mdnsStatus], ['Tesla Bluetooth', state.bluetooth]
     ]);

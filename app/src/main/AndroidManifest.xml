@@ -23,5 +23,15 @@
             android:name=".HubService"
             android:exported="false"
             android:foregroundServiceType="connectedDevice" />
+        <service
+            android:name=".LocalRouteService"
+            android:exported="true"
+            android:permission="android.permission.BIND_VPN_SERVICE"
+            android:foregroundServiceType="connectedDevice">
+            <intent-filter>
+                <action android:name="android.net.VpnService" />
+            </intent-filter>
+            <meta-data android:name="android.net.VpnService.SUPPORTS_ALWAYS_ON" android:value="false" />
+        </service>
     </application>
 </manifest>

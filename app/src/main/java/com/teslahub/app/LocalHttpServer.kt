@@ -16,7 +16,8 @@ class LocalHttpServer(
     private val onRequestError: (String) -> Unit = { HubRuntime.lastRequestError = it },
     private val onListenerError: (String) -> Unit = { HubRuntime.serverError = it },
     private val socketFactory: () -> ServerSocket = { ServerSocket() },
-    private val port: Int = 8765
+    private val port: Int = 8765,
+    private val allowClient: (Inet4Address, LocalNetwork.Binding) -> Boolean = LocalNetwork::sameSubnet
 ) {
     private data class Listener(val binding: LocalNetwork.Binding, val socket: ServerSocket)
     private val listeners = mutableMapOf<String, Listener>()
@@ -89,8 +90,8 @@ class LocalHttpServer(
                 val remote = socket.inetAddress as? Inet4Address
                 val fromPhone = remote == binding.address
                 if (remote != null && !fromPhone) onExternalConnection(remote.hostAddress ?: "Unknown")
-                if (remote == null || !LocalNetwork.sameSubnet(remote, binding)) {
-                    onRequestError("Rejected client ${remote?.hostAddress ?: "non-IPv4"}: outside ${binding.key}/${binding.prefixLength}")
+                if (remote == null || !allowClient(remote, binding)) {
+                    onRequestError("Rejected client ${remote?.hostAddress ?: "non-IPv4"}: not on an allowed local subnet")
                     respond(socket, 403, "text/plain", "Local subnet only".toByteArray())
                     return
                 }

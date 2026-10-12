@@ -1,10 +1,16 @@
 # Troubleshooting
 
+## App closes immediately in version 0.1.4
+
+The physical OPPO crash log identified `NoSuchMethodError` from a stale `LocalHttpServer` constructor call in the APK. Install **version 0.1.6**, which includes the clean-build fix with Kotlin incremental compilation disabled. An uninstall is not required. After updating, open Tesla Hub, start the local server, and confirm it stays open and reports its phone check. If it closes again, keep USB connected so the crash buffer can be read before another rebuild; do not treat it as a hotspot-settings failure. Version 0.1.6 also avoids relayout for unchanged status text, so scrolling to the controls stays stable.
+
 ## No fallback address
 
 Enable the OPPO's **internet-sharing** Wi-Fi hotspot and start the server. Wait five seconds for interface discovery. If the app still says “No Wi-Fi/hotspot interface detected,” record the phone's Android and ColorOS versions, the hotspot screen status, and the app status text. The Phase 1 interface filter may need adjustment for ColorOS's interface name. No silent fallback to cellular or public binding is used.
 
 ## Tesla cannot open the numeric URL
+
+**Verified setup:** Version 0.1.6 worked in the owner's Tesla browser at **`http://169.254.77.1:8765/`** on 12 October 2026. Keep the OPPO hotspot, ordinary local server, and **Start local route test (experimental)** active; use **Copy local route test URL** for the car. The ordinary RFC 1918 **Fallback address** was refused by this Tesla. The following private-address checks describe that earlier diagnosis.
 
 Confirm the Tesla's Wi-Fi is connected to the OPPO hotspot, copy the exact fallback URL including `http://` and `:8765/`, and keep the Tesla Hub server notification active. Try each address listed under **All local addresses** if multiple are shown. A Tesla browser “site cannot be reached” result may mean hotspot client isolation, a different interface address, or ColorOS stopping the service. Record the Tesla Wi-Fi IP/gateway when visible and the exact browser error.
 
@@ -13,6 +19,16 @@ If the launcher opens in Chrome on the OPPO but the Tesla reports `ERR_CONNECTIO
 **Phone server check: Passed** verifies only the phone's HTTP response. **Connections from other devices** counts accepted TCP connections whose source is not the phone's own bound address, including requests rejected by the subnet check. If the count stays zero during the Tesla attempt, the app has not accepted a connection from the car. If it increases, include **Last request error** and **Copy connection diagnostics** so request rejection can be distinguished from a routing failure.
 
 There are [reports of local-address connection failures in a Tesla-owned issue tracker](https://github.com/teslamotors/fleet-telemetry/issues/423), but the report does not establish the cause on this car. Do not assume a universal Tesla browser restriction without comparing another device on the same hotspot. A Tesla software version and that comparison are needed to investigate firmware-specific behavior.
+
+The authors of [Homepage for Tesla](https://github.com/JesseWebDotCom/homepage-for-tesla/blob/main/README.md) and [Tesla CarPlay](https://github.com/marcraft2/tesla-carplay/blob/master/tesla-doc.md) also describe the browser blocking private IP destinations. The owner's version 0.1.1 test shows a passing phone check but a refused Tesla connection and zero accepted external connections during the car attempt. A subsequent PC test loaded the same launcher URL successfully, confirming external access to the phone server. Focus further investigation on the Tesla browser/network path; its exact restriction is not yet proven. Do not keep reinstalling the APK or repeating the same car URL attempt without new evidence.
+
+## Experimental local route cannot be reached
+
+Update the OPPO to **version 0.1.6**. The previous `100.127.255.1` address timed out; the phone reports Android VPN ingress filtering enabled, and Android filters non-link-local VPN addresses arriving through other interfaces. The new build uses the standard link-local exception with `http://169.254.77.1:8765/`. Approve Android's VPN prompt, keep the OPPO hotspot active, and test this new address from the PC on that same hotspot. Compare the ordinary fallback URL, which can change after a hotspot restart.
+
+Include **localRouteStatus**, **localRoutePackets**, **localRouteLastPacket**, **localRouteMonitorError**, and **externalConnectionCount** from **Copy connection diagnostics**. A nonzero TUN count alone does not prove that a client's HTTP packets arrived: IPv6 interface control traffic was observed in the failed 0.1.3 test. Only a loaded launcher or a successful `/api/health` response proves the complete path. A phone check alone still does not prove PC or Tesla reachability. Version 0.1.6's link-local launcher connection has now passed both PC and Tesla tests on the owner's setup. Trusted HTTPS remains unconfigured, and browser API/provider compatibility requires separate checks.
+
+Stop the local route test after collecting the result. The service opts out of always-on VPN and registers only the single `/32` link-local test route for Tesla Hub. No remote gateway is configured. If another VPN was previously active, reconnect it using its own app after stopping the test.
 
 ## Server says Running after its listener failed
 

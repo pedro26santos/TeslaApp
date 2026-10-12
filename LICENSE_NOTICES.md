@@ -10,3 +10,7 @@ Phase 1 contains original Kotlin, HTML, CSS, and JavaScript written for this pro
 | [DiAuto](https://github.com/shihabal3amri/DiAuto) | AGPL-3.0 | Recent Android receiver fork | Not used. Vehicle-specific fork; evaluate upstream Open Headunit first. Preserve original and fork notices if integrated later. |
 
 No Phase 1 runtime dependency on these projects exists. This is an engineering license inventory, not a grant to relicense upstream code. Before selecting a receiver, inspect the exact source revision and every transitive dependency; decide how the combined app source and license obligations will be fulfilled. Do not use paid/proprietary Castla PRO or Headunit Reloaded code.
+
+## Local connection compatibility research
+
+The public [TeslaMirror Android FAQ](https://teslamirror.com/faq-android) was read for its developer's description of private-address restrictions, local VPN routing, and HTTPS requirements. The website is copyrighted by Hustmobile Inc.; no open-source license for that product is assumed. No product code, APK contents, assets, certificates, or private keys are reused. Version 0.1.2's local route prototype is original code using Android's public `VpnService` and socket APIs, guided by [Android's API documentation](https://developer.android.com/develop/connectivity/vpn). It adds no third-party runtime library or commercial dependency.

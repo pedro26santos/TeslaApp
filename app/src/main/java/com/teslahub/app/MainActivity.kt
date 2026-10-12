@@ -12,6 +12,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.net.Uri
+import android.net.VpnService
 import android.provider.Settings
 import android.view.View
 import android.view.ViewGroup
@@ -90,6 +91,22 @@ class MainActivity : Activity() {
         addButton(column, "Open hotspot settings") {
             startActivity(Intent(Settings.ACTION_WIRELESS_SETTINGS))
         }
+        addButton(column, "Start local route test (experimental)") {
+            android.app.AlertDialog.Builder(this)
+                .setTitle("Local route test")
+                .setMessage("This creates a local address on your phone using Android's VPN API. It uses no remote VPN server. Android permits one active VPN, so starting it can replace another VPN. Test it on your PC first; trusted HTTPS for Tesla is not configured yet.")
+                .setPositiveButton("Continue") { _, _ ->
+                    val consent = VpnService.prepare(this)
+                    if (consent == null) startLocalRoute() else startActivityForResult(consent, 42)
+                }
+                .setNegativeButton("Cancel", null).show()
+        }
+        addButton(column, "Stop local route test") { stopService(Intent(this, LocalRouteService::class.java)) }
+        addButton(column, "Copy local route test URL") {
+            val url = HubRuntime.localRouteUrl
+            if (url == null) Toast.makeText(this, "Start the local route test first", Toast.LENGTH_SHORT).show()
+            else getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("Local route test URL", url))
+        }
         val note = TextView(this).apply {
             text = "Phase 1: start the server manually. Android Auto and Bluetooth automation are planned for later phases. Keep the server notification active during the Tesla test."
             textSize = 14f
@@ -116,6 +133,22 @@ class MainActivity : Activity() {
         }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
     }
 
+    private fun startLocalRoute() {
+        try {
+            startForegroundService(Intent(this, LocalRouteService::class.java))
+        } catch (e: Exception) {
+            HubRuntime.localRouteStatus = "Local route failed to start: ${e.message ?: e.javaClass.simpleName}"
+        }
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == 42) {
+            if (resultCode == RESULT_OK) startLocalRoute()
+            else HubRuntime.localRouteStatus = "Android VPN permission was not approved"
+        }
+    }
+
     override fun onStart() {
         super.onStart()
         handler.post(refresh)
@@ -127,17 +160,17 @@ class MainActivity : Activity() {
     }
 
     private fun updateStatus() {
-        val urls = HubRuntime.addresses.joinToString("\n") {
+        val urls = HubRuntime.addresses.joinToString("\n            ") {
             "  ${it.interfaceName}${if (it.connectedWifi) " (phone's connected Wi-Fi)" else ""}: ${it.url}"
         }
-        val checks = HubRuntime.serverChecks.joinToString("\n") { "  ${it.binding.key}: ${it.detail}" }
+        val checks = HubRuntime.serverChecks.joinToString("\n            ") { "  ${it.binding.key}: ${it.detail}" }
         val running = when {
             HubRuntime.addresses.isEmpty() -> "Stopped"
             HubRuntime.serverChecks.any { it.passed } -> "Running (phone check passed)"
             HubRuntime.serverChecks.isEmpty() -> "Listening — checking response"
             else -> "Listening — phone check failed"
         }
-        status.text = """
+        val statusText = """
             App version: ${BuildConfig.VERSION_NAME}
             Tesla Bluetooth: Not configured (Phase 2)
             Hotspot: ${HubRuntime.hotspotStatus}
@@ -158,6 +191,16 @@ class MainActivity : Activity() {
               ${HubRuntime.addresses.firstOrNull()?.url ?: "Unavailable — enable hotspot and start server"}
             All local addresses:
             ${if (urls.isBlank()) "  No Wi-Fi/hotspot interface detected" else urls}
+
+            Experimental local route (PC test first):
+              ${HubRuntime.localRouteStatus}
+              ${HubRuntime.localRouteUrl ?: "No test URL"}
+            Packets arriving in TUN: ${HubRuntime.localRoutePackets}
+            Last route packet: ${HubRuntime.localRouteLastPacket}
+            Route monitor error: ${HubRuntime.localRouteMonitorError ?: "None"}
         """.trimIndent()
+        // Replacing identical text every second relayouts ScrollView and can move the buttons
+        // while the user is scrolling. Only update when a displayed value actually changes.
+        if (status.text.toString() != statusText) status.text = statusText
     }
 }
