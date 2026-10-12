@@ -17,12 +17,13 @@ class HubService : Service() {
     private var worker: Thread? = null
     private var nsd: NsdManager? = null
     private var registration: NsdManager.RegistrationListener? = null
+    private val stateLock = Any()
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
         super.onCreate()
-        server = LocalHttpServer(assets)
+        server = LocalHttpServer({ path -> assets.open(path).use { it.readBytes() } })
         val manager = getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(NotificationChannel("teslahub_server", "Tesla Hub local server", NotificationManager.IMPORTANCE_LOW))
     }
@@ -36,6 +37,7 @@ class HubService : Service() {
             .build()
         startForeground(1, notification)
         if (active.compareAndSet(false, true)) {
+            HubRuntime.resetRequests()
             HubRuntime.serviceRunning = true
             worker = thread(name = "TeslaHub-network", isDaemon = true) { runServerLoop() }
         }
@@ -45,22 +47,40 @@ class HubService : Service() {
     private fun runServerLoop() {
         while (active.get()) {
             try {
-                val found = LocalNetwork.discover()
+                val networkInfo = NetworkDiagnostics.read(this)
+                val found = LocalNetwork.discover(networkInfo.wifiInterfaces)
                 server.reconcile(found)
-                HubRuntime.addresses = server.boundAddresses()
-                HubRuntime.serverError = when {
-                    found.isEmpty() -> "No private Wi-Fi/hotspot interface detected"
-                    HubRuntime.addresses.isEmpty() -> server.lastBindError ?: "Server failed to bind local interface"
-                    server.lastBindError != null -> "Running; ${server.lastBindError}"
-                    else -> "Running"
+                val bound = server.boundAddresses()
+                val checks = if (bound != HubRuntime.serverChecks.map { it.binding } ||
+                    System.currentTimeMillis() - HubRuntime.serverCheckedAt >= 15_000) {
+                    bound.map { ServerHealthCheck.check(it) }
+                } else null
+                synchronized(stateLock) {
+                    if (!active.get()) return
+                    HubRuntime.networkInfo = networkInfo
+                    HubRuntime.addresses = bound
+                    if (checks != null) {
+                        HubRuntime.serverChecks = checks
+                        HubRuntime.serverCheckedAt = System.currentTimeMillis()
+                    }
+                    HubRuntime.serverError = when {
+                        found.isEmpty() -> "No private Wi-Fi/hotspot interface detected"
+                        bound.isEmpty() -> server.lastBindError ?: "Server failed to bind local interface"
+                        server.lastBindError != null -> "Running; ${server.lastBindError}"
+                        HubRuntime.serverChecks.none { it.passed } -> "Listening; phone HTTP check failed"
+                        else -> "Running"
+                    }
+                    HubRuntime.hotspotStatus = when {
+                        found.isEmpty() -> "No Wi-Fi/hotspot interface found"
+                        found.all { it.connectedWifi } -> "Only the phone's connected Wi-Fi is visible; check hotspot address"
+                        else -> "Local interface found (${found.filter { !it.connectedWifi }.joinToString { it.interfaceName }}); confirm hotspot in Settings"
+                    }
+                    if (bound.isNotEmpty() && registration == null) registerMdns()
                 }
-                HubRuntime.hotspotStatus = if (found.any {
-                    val name = it.interfaceName.lowercase()
-                    name.startsWith("ap") || name.startsWith("swlan")
-                }) "Possible hotspot interface detected" else "Unknown — check Android hotspot settings"
-                if (HubRuntime.addresses.isNotEmpty() && registration == null) registerMdns()
             } catch (e: Exception) {
-                HubRuntime.serverError = "Server error: ${e.message ?: e.javaClass.simpleName}"
+                synchronized(stateLock) {
+                    if (active.get()) HubRuntime.serverError = "Server error: ${e.message ?: e.javaClass.simpleName}"
+                }
             }
             try { Thread.sleep(3000) } catch (_: InterruptedException) { break }
         }
@@ -71,11 +91,15 @@ class HubService : Service() {
             val manager = getSystemService(NSD_SERVICE) as NsdManager
             val listener = object : NsdManager.RegistrationListener {
                 override fun onServiceRegistered(serviceInfo: NsdServiceInfo) {
-                    HubRuntime.mdnsStatus = "Service advertised as ${serviceInfo.serviceName}; hostname unverified"
+                    synchronized(stateLock) {
+                        if (active.get()) HubRuntime.mdnsStatus = "Service advertised as ${serviceInfo.serviceName}; hostname unverified"
+                    }
                 }
                 override fun onRegistrationFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
-                    HubRuntime.mdnsStatus = "Unavailable (code $errorCode)"
-                    registration = null
+                    synchronized(stateLock) {
+                        if (active.get()) HubRuntime.mdnsStatus = "Unavailable (code $errorCode)"
+                        registration = null
+                    }
                 }
                 override fun onServiceUnregistered(serviceInfo: NsdServiceInfo) {
                     HubRuntime.mdnsStatus = "Stopped"
@@ -106,11 +130,17 @@ class HubService : Service() {
         }
         registration = null
         server.close()
-        HubRuntime.serviceRunning = false
-        HubRuntime.addresses = emptyList()
-        HubRuntime.serverError = "Stopped"
-        HubRuntime.mdnsStatus = "Stopped"
-        HubRuntime.hotspotStatus = "Unknown"
+        synchronized(stateLock) {
+            HubRuntime.serviceRunning = false
+            HubRuntime.addresses = emptyList()
+            HubRuntime.serverChecks = emptyList()
+            HubRuntime.serverCheckedAt = 0L
+            HubRuntime.serverError = "Stopped"
+            HubRuntime.mdnsStatus = "Stopped"
+            HubRuntime.hotspotStatus = "Unknown"
+            HubRuntime.networkInfo = NetworkDiagnostics.Snapshot()
+            HubRuntime.resetRequests()
+        }
         super.onDestroy()
     }
 }

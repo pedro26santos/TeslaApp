@@ -1,6 +1,5 @@
 package com.teslahub.app
 
-import android.content.res.AssetManager
 import org.json.JSONObject
 import java.io.BufferedInputStream
 import java.net.Inet4Address
@@ -11,7 +10,14 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
 
-class LocalHttpServer(private val assets: AssetManager) {
+class LocalHttpServer(
+    private val readAsset: (String) -> ByteArray,
+    private val onExternalConnection: (String) -> Unit = { HubRuntime.recordExternalConnection(it) },
+    private val onRequestError: (String) -> Unit = { HubRuntime.lastRequestError = it },
+    private val onListenerError: (String) -> Unit = { HubRuntime.serverError = it },
+    private val socketFactory: () -> ServerSocket = { ServerSocket() },
+    private val port: Int = 8765
+) {
     private data class Listener(val binding: LocalNetwork.Binding, val socket: ServerSocket)
     private val listeners = mutableMapOf<String, Listener>()
     private val handlers = Executors.newFixedThreadPool(4)
@@ -22,34 +28,56 @@ class LocalHttpServer(private val assets: AssetManager) {
     @Synchronized fun reconcile(found: List<LocalNetwork.Binding>) {
         if (closed) return
         lastBindError = null
-        val keys = found.map { it.key }.toSet()
+        val bindings = found.associateBy { it.key }
         for (key in listeners.keys.toList()) {
-            if (key !in keys) listeners.remove(key)?.socket?.close()
+            val existing = listeners.getValue(key)
+            if (bindings[key] != existing.binding || existing.socket.isClosed) {
+                listeners.remove(key)?.socket?.close()
+            }
         }
         for (binding in found) {
             if (binding.key in listeners) continue
+            var socket: ServerSocket? = null
             try {
-                val socket = ServerSocket()
+                socket = socketFactory()
                 socket.reuseAddress = true
-                socket.bind(java.net.InetSocketAddress(binding.address, 8765), 8)
-                listeners[binding.key] = Listener(binding, socket)
-                thread(name = "TeslaHub-accept-${binding.key}", isDaemon = true) { acceptLoop(binding, socket) }
+                socket.bind(java.net.InetSocketAddress(binding.address, port), 8)
+                val listener = Listener(binding, socket)
+                listeners[binding.key] = listener
+                thread(name = "TeslaHub-accept-${binding.key}", isDaemon = true) { acceptLoop(listener) }
             } catch (e: Exception) {
+                try { socket?.close() } catch (_: Exception) { }
+                listeners.remove(binding.key)
                 lastBindError = "Could not bind ${binding.key}: ${e.message ?: e.javaClass.simpleName}"
             }
         }
     }
 
-    @Synchronized fun boundAddresses(): List<LocalNetwork.Binding> = listeners.values.map { it.binding }
+    @Synchronized fun boundAddresses(): List<LocalNetwork.Binding> =
+        LocalNetwork.preferredOrder(listeners.values.filter { !it.socket.isClosed }.map { it.binding })
 
-    private fun acceptLoop(binding: LocalNetwork.Binding, serverSocket: ServerSocket) {
-        while (!closed && !serverSocket.isClosed) {
-            try {
+    private fun acceptLoop(listener: Listener) {
+        val binding = listener.binding
+        val serverSocket = listener.socket
+        try {
+            while (!closed && !serverSocket.isClosed) {
                 val client = serverSocket.accept()
-                handlers.execute { handle(client, binding) }
-            } catch (_: Exception) {
-                if (!serverSocket.isClosed) HubRuntime.serverError = "Accept failed on ${binding.key}"
-                break
+                try {
+                    handlers.execute { handle(client, binding) }
+                } catch (e: Exception) {
+                    client.close()
+                    throw e
+                }
+            }
+        } catch (e: Exception) {
+            if (!closed && !serverSocket.isClosed) {
+                onListenerError("Accept failed on ${binding.key}: ${e.javaClass.simpleName}: ${e.message.orEmpty()}")
+            }
+        } finally {
+            try { serverSocket.close() } catch (_: Exception) { }
+            synchronized(this) {
+                // An old accept thread must never remove a replacement listener.
+                if (listeners[binding.key] === listener) listeners.remove(binding.key)
             }
         }
     }
@@ -59,7 +87,10 @@ class LocalHttpServer(private val assets: AssetManager) {
             try {
                 socket.soTimeout = 5000
                 val remote = socket.inetAddress as? Inet4Address
+                val fromPhone = remote == binding.address
+                if (remote != null && !fromPhone) onExternalConnection(remote.hostAddress ?: "Unknown")
                 if (remote == null || !LocalNetwork.sameSubnet(remote, binding)) {
+                    onRequestError("Rejected client ${remote?.hostAddress ?: "non-IPv4"}: outside ${binding.key}/${binding.prefixLength}")
                     respond(socket, 403, "text/plain", "Local subnet only".toByteArray())
                     return
                 }
@@ -84,16 +115,21 @@ class LocalHttpServer(private val assets: AssetManager) {
                 }
                 val host = headers["host"]?.lowercase()?.substringBefore(':')
                 if (host != binding.key && host != "teslahub.local") {
+                    onRequestError("Rejected Host header: ${host.orEmpty().take(100)}")
                     respond(socket, 403, "text/plain", "Invalid host".toByteArray())
                     return
                 }
+                if (method == "GET" && path == "/api/health") {
+                    respond(socket, 200, "text/plain; charset=utf-8", ServerHealthCheck.BODY.toByteArray(StandardCharsets.UTF_8))
+                    return
+                }
                 if (method == "GET" && path == "/api/state") {
-                    respond(socket, 200, "application/json; charset=utf-8", HubRuntime.stateJson().toString().toByteArray(StandardCharsets.UTF_8))
+                    respond(socket, 200, "application/json; charset=utf-8", HubRuntime.stateJson(fromPhone).toString().toByteArray(StandardCharsets.UTF_8))
                     return
                 }
                 if (method == "POST" && (path == "/api/report" || path == "/api/ping")) {
                     val origin = headers["origin"]
-                    if (origin != null && origin != "http://${binding.key}:8765" && origin != "http://teslahub.local:8765") {
+                    if (origin != null && origin != "http://${binding.key}:$port" && origin != "http://teslahub.local:$port") {
                         respond(socket, 403, "text/plain", "Invalid origin".toByteArray())
                         return
                     }
@@ -114,8 +150,8 @@ class LocalHttpServer(private val assets: AssetManager) {
                             if (read < 0) return
                             offset += read
                         }
-                        HubRuntime.recordBrowser(JSONObject(String(body, StandardCharsets.UTF_8)))
-                    } else HubRuntime.pingBrowser()
+                        HubRuntime.recordBrowser(JSONObject(String(body, StandardCharsets.UTF_8)), fromPhone)
+                    } else HubRuntime.pingBrowser(fromPhone)
                     respond(socket, 200, "application/json; charset=utf-8", "{\"ok\":true}".toByteArray())
                     return
                 }
@@ -127,11 +163,11 @@ class LocalHttpServer(private val assets: AssetManager) {
                 )
                 val file = files[path]
                 if (method == "GET" && file != null) {
-                    respond(socket, 200, file.second, assets.open(file.first).use { it.readBytes() })
+                    respond(socket, 200, file.second, readAsset(file.first))
                 } else respond(socket, 404, "text/plain", "Not found".toByteArray())
             } catch (e: Exception) {
                 try { respond(socket, 500, "text/plain", "Server error".toByteArray()) } catch (_: Exception) { }
-                HubRuntime.lastRequestError = "Request error: ${e.javaClass.simpleName}"
+                onRequestError("Request error: ${e.javaClass.simpleName}: ${e.message.orEmpty().take(200)}")
             }
         }
     }

@@ -20,6 +20,8 @@ On macOS/Linux, run `./gradlew testDebugUnitTest assembleDebug`. The debug APK i
 4. Connect the Tesla to the OPPO hotspot. In the Tesla browser, enter the **Fallback address** displayed by the app, including `:8765/`.
 5. Open **Diagnostics** in the Tesla launcher to record viewport and browser capabilities.
 
+Version 0.1.1 checks the HTTP response on the phone, recovers failed listeners, and offers **Open launcher on phone** and **Copy connection diagnostics**. If the phone loads the launcher but the Tesla refuses the connection, follow Test 3 in [TESTING.md](TESTING.md). A passed phone check does not confirm access from the car.
+
 The `teslahub.local` address is a preferred experiment, not a guaranteed hostname. The app advertises an mDNS service but Android may assign a different host name and Tesla may not resolve mDNS. Use the numeric URL first.
 
 Stremio Web, RTP Play, and Vodafone TV open directly in the Tesla browser. Their default URLs are configurable under **Settings** and stored only in that browser. Fullscreen Theater behavior and provider playback are not claimed. Tesla's native restrictions remain in effect.

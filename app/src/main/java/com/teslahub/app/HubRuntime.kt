@@ -9,12 +9,44 @@ object HubRuntime {
     @Volatile var lastRequestError: String? = null
     @Volatile var mdnsStatus = "Stopped"
     @Volatile var addresses: List<LocalNetwork.Binding> = emptyList()
+    @Volatile var serverChecks: List<ServerHealthCheck.Result> = emptyList()
+    @Volatile var serverCheckedAt = 0L
     @Volatile var hotspotStatus = "Unknown"
+    @Volatile var networkInfo = NetworkDiagnostics.Snapshot()
     private val browserLock = Any()
     private var browserReport = JSONObject()
     private var browserLastSeen = 0L
+    private var phoneBrowserReport = JSONObject()
+    private var phoneBrowserLastSeen = 0L
+    private val requestLock = Any()
+    private var requestCount = 0L
+    private var lastClientAddress: String? = null
+    private var lastRequestAt = 0L
 
-    fun recordBrowser(report: JSONObject) {
+    fun recordExternalConnection(address: String) = synchronized(requestLock) {
+        requestCount++
+        lastClientAddress = address
+        lastRequestAt = System.currentTimeMillis()
+    }
+
+    fun resetRequests() = synchronized(requestLock) {
+        requestCount = 0L
+        lastClientAddress = null
+        lastRequestAt = 0L
+        lastRequestError = null
+        synchronized(browserLock) {
+            browserLastSeen = 0L
+            phoneBrowserLastSeen = 0L
+            browserReport = JSONObject()
+            phoneBrowserReport = JSONObject()
+        }
+    }
+
+    fun requestSummary(): String = synchronized(requestLock) {
+        "$requestCount; last client: ${lastClientAddress ?: "None"}"
+    }
+
+    fun recordBrowser(report: JSONObject, fromPhone: Boolean) {
         val clean = JSONObject()
         for (key in listOf("innerWidth", "innerHeight", "devicePixelRatio", "screenWidth",
             "screenHeight", "userAgent", "platform", "orientation", "language", "secureContext",
@@ -29,26 +61,49 @@ object HubRuntime {
             }
         }
         synchronized(browserLock) {
-            browserReport = clean
-            browserLastSeen = System.currentTimeMillis()
+            if (fromPhone) {
+                phoneBrowserReport = clean
+                phoneBrowserLastSeen = System.currentTimeMillis()
+            } else {
+                browserReport = clean
+                browserLastSeen = System.currentTimeMillis()
+            }
         }
     }
 
-    fun pingBrowser() {
-        synchronized(browserLock) { browserLastSeen = System.currentTimeMillis() }
+    fun pingBrowser(fromPhone: Boolean) {
+        synchronized(browserLock) {
+            if (fromPhone) phoneBrowserLastSeen = System.currentTimeMillis()
+            else browserLastSeen = System.currentTimeMillis()
+        }
     }
 
     fun browserConnected(): Boolean = synchronized(browserLock) {
         browserLastSeen > 0 && System.currentTimeMillis() - browserLastSeen < 15_000
     }
 
-    fun stateJson(): JSONObject {
+    fun stateJson(fromPhone: Boolean = false): JSONObject {
         val currentAddresses = addresses
-        val browser = synchronized(browserLock) { JSONObject(browserReport.toString()) }
+        val browser = synchronized(browserLock) {
+            JSONObject((if (fromPhone) phoneBrowserReport else browserReport).toString())
+        }
         return JSONObject().apply {
             put("serviceRunning", serviceRunning)
-            put("serverRunning", currentAddresses.isNotEmpty())
+            put("serverListening", currentAddresses.isNotEmpty())
+            put("serverRunning", currentAddresses.isNotEmpty() && serverChecks.any { it.passed })
             put("serverError", serverError)
+            put("appVersion", BuildConfig.VERSION_NAME)
+            put("serverCheckedAt", serverCheckedAt)
+            put("serverChecks", org.json.JSONArray().apply {
+                serverChecks.forEach { result ->
+                    put(JSONObject().put("url", result.binding.url).put("passed", result.passed).put("detail", result.detail))
+                }
+            })
+            synchronized(requestLock) {
+                put("externalConnectionCount", requestCount)
+                put("lastExternalClientAddress", lastClientAddress ?: JSONObject.NULL)
+                put("lastExternalConnectionAt", lastRequestAt)
+            }
             put("lastRequestError", lastRequestError ?: JSONObject.NULL)
             put("mdnsStatus", mdnsStatus)
             put("preferredAddress", "http://teslahub.local:8765/")
@@ -60,8 +115,20 @@ object HubRuntime {
                 }
             })
             put("hotspot", hotspotStatus)
+            put("vpnActive", if (networkInfo.checked) networkInfo.vpnActive else JSONObject.NULL)
+            put("connectedWifi", org.json.JSONArray().apply {
+                networkInfo.wifiLinks.forEach { link ->
+                    put(JSONObject().put("interface", link.interfaceName)
+                        .put("addresses", org.json.JSONArray(link.addresses))
+                        .put("gateways", org.json.JSONArray(link.gateways)))
+                }
+            })
             put("bluetooth", "Not configured (Phase 2)")
-            put("browserConnected", browserConnected())
+            put("requestFromPhone", fromPhone)
+            put("externalBrowserConnected", browserConnected())
+            put("browserConnected", if (fromPhone) synchronized(browserLock) {
+                phoneBrowserLastSeen > 0 && System.currentTimeMillis() - phoneBrowserLastSeen < 15_000
+            } else browserConnected())
             put("browser", browser)
             put("phone", JSONObject().put("manufacturer", Build.MANUFACTURER)
                 .put("model", Build.MODEL).put("android", Build.VERSION.RELEASE)

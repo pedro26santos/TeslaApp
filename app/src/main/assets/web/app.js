@@ -62,7 +62,7 @@
   }
   function render() {
     var state = latestState || {};
-    var browser = state.browser || latestReport || {};
+    var browser = latestReport || state.browser || {};
     var phone = state.phone || {};
     var connected = !!state.browserConnected;
     byId('connection').textContent = connected ? 'Local browser connected' : 'Waiting for phone server';
@@ -71,7 +71,11 @@
     addRows('phone-data', [
       ['Device', [phone.manufacturer, phone.model].filter(Boolean).join(' ')],
       ['Android', phone.android], ['ColorOS', phone.colorOs],
+      ['App version', state.appVersion],
       ['Hotspot', state.hotspot], ['Local server', state.serverRunning ? 'Running' : state.serverError],
+      ['Phone server checks', (state.serverChecks || []).map(function (check) { return check.url + ': ' + check.detail; }).join(' · ')],
+      ['Connections from other devices', state.externalConnectionCount],
+      ['Last external client', state.lastExternalClientAddress || 'None'], ['VPN active', state.vpnActive],
       ['Last request error', state.lastRequestError || 'None'],
       ['Interfaces / URLs', addressRows], ['Preferred mDNS URL', state.preferredAddress],
       ['mDNS', state.mdnsStatus], ['Tesla Bluetooth', state.bluetooth]

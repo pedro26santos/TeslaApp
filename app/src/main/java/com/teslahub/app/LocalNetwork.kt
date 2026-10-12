@@ -4,12 +4,13 @@ import java.net.Inet4Address
 import java.net.NetworkInterface
 
 object LocalNetwork {
-    data class Binding(val address: Inet4Address, val prefixLength: Int, val interfaceName: String) {
+    data class Binding(val address: Inet4Address, val prefixLength: Int, val interfaceName: String,
+        val connectedWifi: Boolean = false) {
         val url: String get() = "http://${address.hostAddress}:8765/"
         val key: String get() = address.hostAddress ?: ""
     }
 
-    fun discover(): List<Binding> {
+    fun discover(connectedWifiInterfaces: Set<String> = emptySet()): List<Binding> {
         val result = mutableListOf<Binding>()
         val interfaces = NetworkInterface.getNetworkInterfaces() ?: return emptyList()
         while (interfaces.hasMoreElements()) {
@@ -21,13 +22,19 @@ object LocalNetwork {
             for (item in nic.interfaceAddresses) {
                 val ip = item.address as? Inet4Address ?: continue
                 if (!isPrivate(ip)) continue
-                result.add(Binding(ip, item.networkPrefixLength.toInt(), nic.name))
+                result.add(Binding(ip, item.networkPrefixLength.toInt(), nic.name, nic.name in connectedWifiInterfaces))
             }
         }
-        return result.distinctBy { it.key }.sortedWith(compareBy<Binding> {
-            if (it.interfaceName.lowercase().startsWith("ap") || it.interfaceName.lowercase().startsWith("swlan")) 0 else 1
-        }.thenBy { it.interfaceName })
+        return preferredOrder(result.distinctBy { it.key })
     }
+
+    fun preferredOrder(bindings: List<Binding>): List<Binding> = bindings.sortedWith(compareBy<Binding> {
+        when {
+            it.connectedWifi -> 2
+            it.interfaceName.lowercase().startsWith("ap") || it.interfaceName.lowercase().startsWith("swlan") -> 0
+            else -> 1
+        }
+    }.thenBy { it.interfaceName })
 
     fun isPrivate(ip: Inet4Address): Boolean {
         val bytes = ip.address.map { it.toInt() and 0xff }

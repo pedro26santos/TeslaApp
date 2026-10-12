@@ -11,6 +11,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.net.Uri
 import android.provider.Settings
 import android.view.View
 import android.view.ViewGroup
@@ -19,6 +20,7 @@ import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.Toast
 
 class MainActivity : Activity() {
     private lateinit var status: TextView
@@ -69,6 +71,22 @@ class MainActivity : Activity() {
             val clipboard = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
             clipboard.setPrimaryClip(ClipData.newPlainText("Tesla Hub URL", url))
         }
+        addButton(column, "Open launcher on phone") {
+            val url = HubRuntime.addresses.firstOrNull()?.url
+            if (url == null) {
+                Toast.makeText(this, "Enable hotspot and start the server first", Toast.LENGTH_SHORT).show()
+            } else {
+                val browser = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                try { startActivity(browser) } catch (_: android.content.ActivityNotFoundException) {
+                    Toast.makeText(this, "No browser installed; use Copy fallback URL", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+        addButton(column, "Copy connection diagnostics") {
+            val clipboard = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
+            clipboard.setPrimaryClip(ClipData.newPlainText("Tesla Hub connection diagnostics", HubRuntime.stateJson().toString(2)))
+            Toast.makeText(this, "Connection diagnostics copied", Toast.LENGTH_SHORT).show()
+        }
         addButton(column, "Open hotspot settings") {
             startActivity(Intent(Settings.ACTION_WIRELESS_SETTINGS))
         }
@@ -109,14 +127,28 @@ class MainActivity : Activity() {
     }
 
     private fun updateStatus() {
-        val urls = HubRuntime.addresses.joinToString("\n") { "  ${it.interfaceName}: ${it.url}" }
+        val urls = HubRuntime.addresses.joinToString("\n") {
+            "  ${it.interfaceName}${if (it.connectedWifi) " (phone's connected Wi-Fi)" else ""}: ${it.url}"
+        }
+        val checks = HubRuntime.serverChecks.joinToString("\n") { "  ${it.binding.key}: ${it.detail}" }
+        val running = when {
+            HubRuntime.addresses.isEmpty() -> "Stopped"
+            HubRuntime.serverChecks.any { it.passed } -> "Running (phone check passed)"
+            HubRuntime.serverChecks.isEmpty() -> "Listening — checking response"
+            else -> "Listening — phone check failed"
+        }
         status.text = """
+            App version: ${BuildConfig.VERSION_NAME}
             Tesla Bluetooth: Not configured (Phase 2)
             Hotspot: ${HubRuntime.hotspotStatus}
-            Local Server: ${if (HubRuntime.addresses.isNotEmpty()) "Running" else "Stopped"}
+            Local Server: $running
             Server detail: ${HubRuntime.serverError}
+            Phone server check:
+            ${checks.ifBlank { "  Not checked" }}
+            Connections from other devices: ${HubRuntime.requestSummary()}
+            VPN active: ${if (!HubRuntime.networkInfo.checked) "Unknown" else if (HubRuntime.networkInfo.vpnActive) "Yes" else "No"}
             Last request error: ${HubRuntime.lastRequestError ?: "None"}
-            Tesla Browser: ${if (HubRuntime.browserConnected()) "Connected" else "Disconnected"}
+            Tesla / external browser: ${if (HubRuntime.browserConnected()) "Connected" else "Disconnected"}
             Android Auto: Not installed (Phase 3)
             mDNS: ${HubRuntime.mdnsStatus}
 
