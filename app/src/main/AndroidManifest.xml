@@ -12,6 +12,11 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
 
+    <queries>
+        <package android:name="com.teslahub.receiver" />
+        <package android:name="com.google.android.projection.gearhead" />
+    </queries>
+
     <application
         android:icon="@drawable/ic_tesla_hub"
         android:label="Tesla Hub"
@@ -24,6 +29,7 @@
             </intent-filter>
         </activity>
         <activity android:name=".ConnectionSettingsActivity" android:exported="false" />
+        <activity android:name=".ReceiverActivity" android:exported="false" />
         <service android:name=".AutomationService" android:exported="false"
             android:foregroundServiceType="connectedDevice" />
         <receiver android:name=".ConnectionReceiver" android:exported="true">

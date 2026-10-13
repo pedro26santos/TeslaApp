@@ -1,6 +1,6 @@
 # Tesla Hub
 
-Tesla Hub is a local Android app and browser launcher for an OPPO phone and a Tesla connected to its hotspot. The local launcher passed the owner's car test in version 0.1.6. Version **0.2.1** adds opt-in Bluetooth connection automation, saved settings, and a configurable disconnect delay. On **13 October 2026**, the owner confirmed automatic startup on Bluetooth connection and shutdown after disconnect. Remaining reliability checks are in [TESTING_PHASE2.md](TESTING_PHASE2.md). Android Auto projection is Phase 3 work; hotspot activation remains user assisted on the Android 14 OPPO.
+Tesla Hub is a local Android app and browser launcher for an OPPO phone and a Tesla connected to its hotspot. The local launcher passed the owner's car test in version 0.1.6. On **13 October 2026**, the owner confirmed version **0.2.1** automatically starts on Bluetooth connection and shuts down after disconnect. The current **0.3.0** local build adds a real Android Auto receiver qualification path on the OPPO. Browser projection is Phase 4 work; hotspot activation remains user assisted on the Android 14 OPPO.
 
 ## Build
 
@@ -14,7 +14,15 @@ On macOS/Linux, run `./gradlew clean testDebugUnitTest lintDebug assembleDebug`.
 
 ## First use
 
-For the new APK's setup and automatic mode, use [TESTING_PHASE2.md](TESTING_PHASE2.md). Install **0.2.1** on the OPPO; automatic mode defaults off. **Start Tesla Hub** now starts the ordinary server and the existing local route together. **Stop Tesla Hub** stops both and disables automatic mode. **Connection settings** selects the already paired Tesla, asks for Nearby Devices/notification/VPN consent as needed, and saves the 60-second default delay. Automatic shutdown affects automatically started services; manual sessions and the manually enabled hotspot retain manual control.
+### Phase 3 receiver test — version 0.3.0
+
+The current local build adds **Android Auto receiver (phone test)** on the OPPO. It controls a separate source-built **Tesla Hub Receiver (Open Headunit)** app using explicit intents and shows bounded session/video/audio diagnostics. On **13 October 2026**, real Android Auto/Waze at 1280 × 720 H.264, touch, stop/reconnect, and simultaneous PC access through the local VPN passed on the physical OPPO. The owner then reported the fresh parked-car checklist working as expected; photos independently confirm Tesla browser access alongside live receiver decoding with no receiver error. Individually itemized audio/call/timing observations remain follow-up checks. **The Tesla browser does not display Android Auto video in this build.**
+
+Use [TESTING_PHASE3.md](TESTING_PHASE3.md) for exact OPPO setup, stop/reconnect, and parked audio/local-network regression steps. Build the companion with `.\tools\Build-Receiver.ps1`; source revision, patch and notices are under [third_party/open-headunit](third_party/open-headunit/README.md). Tesla Hub remains a single original Kotlin module with no new runtime libraries linked into it. Automatic hotspot activation remains a separate follow-up.
+
+### Existing local launcher and Bluetooth automation
+
+For automatic mode setup, use [TESTING_PHASE2.md](TESTING_PHASE2.md), which records the qualified **0.2.1** milestone. Install the current Tesla Hub APK as an update; saved settings persist and automatic mode defaults off on a new installation. **Start Tesla Hub** starts the ordinary server and existing local route together. **Stop Tesla Hub** stops both and disables automatic mode. **Connection settings** selects the paired Tesla, obtains Nearby Devices/notification/VPN consent as needed, and saves the 60-second default delay. Automatic shutdown affects automatically started services; manual sessions and the manually enabled hotspot retain manual control.
 
 The following individual controls also remain available for the previously verified manual setup:
 

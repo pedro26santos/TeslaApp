@@ -65,6 +65,8 @@
     var browser = latestReport || state.browser || {};
     var phone = state.phone || {};
     var automation = state.automation || {};
+    var receiver = state.receiver || {};
+    var session = receiver.session || {};
     var connected = !!state.browserConnected;
     byId('connection').textContent = connected ? 'Local browser connected' : 'Waiting for phone server';
     byId('connection').classList.toggle('online', connected);
@@ -104,6 +106,15 @@
     ]);
     addRows('future-data', [
       ['Receiver', state.androidAuto], ['Stream', state.stream],
+      ['Receiver app version', receiver.receiverVersion], ['Android Auto version', receiver.androidAutoVersion],
+      ['Receiver query fresh', receiver.fresh], ['Video decoded on phone', receiver.videoDecodedOnPhone],
+      ['Decoded video size', session.decodedWidth && session.decodedHeight ? session.decodedWidth + ' × ' + session.decodedHeight : 'Unavailable'],
+      ['Announced video size', session.announcedWidth && session.announcedHeight ? session.announcedWidth + ' × ' + session.announcedHeight : 'Unavailable'],
+      ['Announced DPI', session.announcedDpi], ['Announced FPS (not measured)', session.announcedFps],
+      ['Video codec', session.codec], ['Frames rendered on phone', session.framesRendered],
+      ['Last frame age (ms)', session.lastFrameAgeMs],
+      ['Configured audio sinks (not playback proof)', Object.keys(session.audioSinks || {}).map(function (key) { return key + ': ' + session.audioSinks[key]; }).join(' · ') || 'None'],
+      ['Receiver command', receiver.command], ['Receiver error', receiver.error || 'None'],
       ['Frame rate', 'Unavailable'], ['Encoder', 'Unavailable'], ['Bitrate', 'Unavailable'],
       ['Touch mapping', 'Unavailable']
     ]);
@@ -193,7 +204,10 @@
   document.querySelectorAll('[data-view]').forEach(function (button) {
     button.addEventListener('click', function () { showView(button.dataset.view); });
   });
-  byId('android-auto').addEventListener('click', function () { showToast('Android Auto module not installed yet (Phase 3).'); });
+  byId('android-auto').addEventListener('click', function () {
+    showView('diagnostics');
+    showToast('Receiver setup is on the OPPO. Tesla browser projection follows in Phase 4.');
+  });
   byId('stremio').addEventListener('click', function () { openUrl('stremio'); });
   byId('rtp').addEventListener('click', function () { openUrl('rtp'); });
   byId('vodafone').addEventListener('click', function () { showView('diagnostics'); });

@@ -1,0 +1,197 @@
+diff --git a/app/build.gradle.kts b/app/build.gradle.kts
+index 27878b0..ff935a4 100644
+--- a/app/build.gradle.kts
++++ b/app/build.gradle.kts
+@@ -93,11 +93,11 @@ android {
+         // installs, testers) and existing users just get a normal update. Only the display name
+         // changed to Open Headunit. The code package and namespace stay openheadunit, so the
+         // applicationId deliberately differs from the namespace, like com.google.talk for Hangouts.
+-        applicationId = "com.andrerinas.headunitrevived"
++        applicationId = "com.teslahub.receiver"
+         minSdk = 16
+         targetSdk = 36
+-        versionCode = 117
+-        versionName = "3.5.0-beta4"
++        versionCode = 1
++        versionName = "3.5.0-beta4-teslahub1"
+         setProperty("archivesBaseName", "${applicationId}_${versionName}")
+         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+         multiDexEnabled = true
+diff --git a/app/src/main/java/com/andrerinas/openheadunit/aap/protocol/messages/ServiceDiscoveryResponse.kt b/app/src/main/java/com/andrerinas/openheadunit/aap/protocol/messages/ServiceDiscoveryResponse.kt
+index 29d9ecc..aa443c0 100644
+--- a/app/src/main/java/com/andrerinas/openheadunit/aap/protocol/messages/ServiceDiscoveryResponse.kt
++++ b/app/src/main/java/com/andrerinas/openheadunit/aap/protocol/messages/ServiceDiscoveryResponse.kt
+@@ -2,6 +2,7 @@ package com.andrerinas.openheadunit.aap.protocol.messages
+ 
+ import android.content.Context
+ import com.andrerinas.openheadunit.App
++import com.andrerinas.openheadunit.automation.TeslaHubProbe
+ import com.andrerinas.openheadunit.aap.AapMessage
+ import com.andrerinas.openheadunit.aap.NarrowBandProfilePolicy
+ import com.andrerinas.openheadunit.aap.VehicleIdentityPolicy
+@@ -117,6 +118,7 @@ internal class ServiceDiscoveryResponse(context: Context, audioConfig: AudioSess
+                     // Decided once, above every line that reports it: the probe below must
+                     // describe the profile actually being asked for, not the one in Settings.
+                     val announcedFps = announcedFrameRate(context, settings)
++                    TeslaHubProbe.recordAnnouncement(HeadUnitScreenConfig.getDensityDpi(), announcedFps)
+ 
+                     AppLog.i("[ServiceDiscovery] NegotiatedResolution is: ${HeadUnitScreenConfig.getNegotiatedWidth()}x${HeadUnitScreenConfig.getNegotiatedHeight()}")
+                     logNegotiatedCodecCapability(effectiveCodec, announcedFps)
+diff --git a/app/src/main/java/com/andrerinas/openheadunit/automation/AutomationEffectRunner.kt b/app/src/main/java/com/andrerinas/openheadunit/automation/AutomationEffectRunner.kt
+index 5521ed4..2856fbd 100644
+--- a/app/src/main/java/com/andrerinas/openheadunit/automation/AutomationEffectRunner.kt
++++ b/app/src/main/java/com/andrerinas/openheadunit/automation/AutomationEffectRunner.kt
+@@ -201,6 +201,7 @@ object AutomationEffectRunner {
+             .put("wireless", comm.isWirelessSession)
+             .put("wifiMode", component.settings.wifiConnectionMode.toString())
+             .put("state", comm.connectionState.value.let { it::class.java.simpleName })
++            .put("teslaHubProbe", TeslaHubProbe.snapshot(component))
+     }
+ 
+     private fun logLevelOf(level: String) = when (level) {
+@@ -212,3 +213,34 @@ object AutomationEffectRunner {
+         else -> LogExporter.LogLevel.SILENT
+     }
+ }
++
++/** Tesla Hub diagnostics extension, 2026-10-13. SPDX-License-Identifier: AGPL-3.0-or-later. */
++object TeslaHubProbe {
++    @Volatile private var announcedDpi: Int? = null
++    @Volatile private var announcedFps: Int? = null
++
++    fun recordAnnouncement(dpi: Int, fps: Int) {
++        announcedDpi = dpi
++        announcedFps = fps
++    }
++
++    fun snapshot(component: AppComponent): JSONObject {
++        val transportStarted = component.commManager.isConnected &&
++            component.commManager.connectionState.value is com.andrerinas.openheadunit.connection.CommManager.ConnectionState.TransportStarted
++        val video = component.videoDecoder
++        val hasFrames = transportStarted && video.framesRenderedThisSession > 0
++        val lastFrame = video.diagnosticLastFrameMs
++        return JSONObject().put("probeVersion", 1)
++            .put("transportStarted", transportStarted)
++            .put("framesRendered", if (transportStarted) video.framesRenderedThisSession else 0L)
++            .put("decodedWidth", if (hasFrames) video.videoWidth else JSONObject.NULL)
++            .put("decodedHeight", if (hasFrames) video.videoHeight else JSONObject.NULL)
++            .put("announcedWidth", if (transportStarted) com.andrerinas.openheadunit.utils.HeadUnitScreenConfig.getNegotiatedWidth() else JSONObject.NULL)
++            .put("announcedHeight", if (transportStarted) com.andrerinas.openheadunit.utils.HeadUnitScreenConfig.getNegotiatedHeight() else JSONObject.NULL)
++            .put("announcedDpi", if (transportStarted) announcedDpi ?: JSONObject.NULL else JSONObject.NULL)
++            .put("announcedFps", if (transportStarted) announcedFps ?: JSONObject.NULL else JSONObject.NULL)
++            .put("codec", if (transportStarted) video.diagnosticCodec ?: JSONObject.NULL else JSONObject.NULL)
++            .put("lastFrameAgeMs", if (hasFrames && lastFrame > 0L) (android.os.SystemClock.elapsedRealtime() - lastFrame).coerceAtLeast(0L) else JSONObject.NULL)
++            .put("audioSinks", if (transportStarted) JSONObject(component.audioDecoder.diagnosticSinks().mapKeys { it.key.toString() }) else JSONObject())
++    }
++}
+diff --git a/app/src/main/java/com/andrerinas/openheadunit/decoder/audio/AudioDecoder.kt b/app/src/main/java/com/andrerinas/openheadunit/decoder/audio/AudioDecoder.kt
+index 64677b2..4eec5c0 100644
+--- a/app/src/main/java/com/andrerinas/openheadunit/decoder/audio/AudioDecoder.kt
++++ b/app/src/main/java/com/andrerinas/openheadunit/decoder/audio/AudioDecoder.kt
+@@ -22,6 +22,10 @@ class AudioDecoder {
+ 
+     private val audioTracks = ConcurrentHashMap<Int, AudioTrackWrapper>(3)
+     private var mixer: AudioMixer? = null
++
++    // Tesla Hub Phase 3 diagnostics, 2026-10-13. Configured sinks are not playback proof.
++    @Synchronized fun diagnosticSinks(): Map<Int, String> =
++        audioTracks.mapValues { (_, track) -> track.builtCodec().name }
+     internal data class PlaybackCallbacks(
+         val activity: (Int, Any) -> Unit = { _, _ -> },
+         val registered: (Int, Any) -> Unit = { _, _ -> },
+diff --git a/app/src/main/java/com/andrerinas/openheadunit/decoder/video/VideoDecoder.kt b/app/src/main/java/com/andrerinas/openheadunit/decoder/video/VideoDecoder.kt
+index 4303036..6f6f2a9 100644
+--- a/app/src/main/java/com/andrerinas/openheadunit/decoder/video/VideoDecoder.kt
++++ b/app/src/main/java/com/andrerinas/openheadunit/decoder/video/VideoDecoder.kt
+@@ -586,6 +586,10 @@ class VideoDecoder(
+     val videoWidth: Int get() = mWidth
+     val videoHeight: Int get() = mHeight
+ 
++    // Tesla Hub Phase 3 diagnostics, 2026-10-13. No video payload leaves this process.
++    val diagnosticCodec: String? get() = if (running) currentCodecType.displayName else null
++    val diagnosticLastFrameMs: Long get() = lastFrameRenderedMs
++
+     /**
+      * Whether any frame of the current session has rendered. Distinguishes a decoder rebuilt under a
+      * live, proven stream from one that has never worked, which [lastFrameRenderedMs] cannot: every
+diff --git a/app/src/main/java/com/andrerinas/openheadunit/utils/Settings.kt b/app/src/main/java/com/andrerinas/openheadunit/utils/Settings.kt
+index 3cef89a..32ad48b 100644
+--- a/app/src/main/java/com/andrerinas/openheadunit/utils/Settings.kt
++++ b/app/src/main/java/com/andrerinas/openheadunit/utils/Settings.kt
+@@ -93,7 +93,7 @@ class Settings(private val context: Context) {
+         }
+ 
+     var resolutionId: Int
+-        get() = prefs.getInt("resolutionId", 0)
++        get() = prefs.getInt("resolutionId", 2)
+         set(value) = prefs.edit().putInt("resolutionId", value).apply()
+ 
+     // How the video is fitted into the panel, in CSS object-fit terms: FILL stretches,
+@@ -1038,16 +1038,16 @@ class Settings(private val context: Context) {
+                 prefs.edit().putInt("wifi-connection-mode", 3).remove("native-aa-wireless").apply()
+                 return WifiLauncherMode.NATIVE
+             }
+-            return WifiLauncherMode.byIdOrDefault(prefs.getInt("wifi-connection-mode", -1))
++            return WifiLauncherMode.byIdOrDefault(prefs.getInt("wifi-connection-mode", 1))
+         }
+         set(value) { prefs.edit().putInt("wifi-connection-mode", value.id).apply() }
+ 
+     var videoCodec: String
+-        get() = prefs.getString("video-codec", "Auto")!!
++        get() = prefs.getString("video-codec", "H.264")!!
+         set(value) { prefs.edit().putString("video-codec", value).apply() }
+ 
+     var fpsLimit: Int
+-        get() = prefs.getInt("fps-limit", 60)
++        get() = prefs.getInt("fps-limit", 30)
+         set(value) { prefs.edit().putInt("fps-limit", value).apply() }
+ 
+     /**
+@@ -1167,7 +1167,7 @@ class Settings(private val context: Context) {
+      * nothing, which is what frees the physical microphone for a Bluetooth headset or intercom.
+      */
+     var useHeadUnitMicrophone: Boolean
+-        get() = prefs.getBoolean("use-head-unit-microphone", true)
++        get() = prefs.getBoolean("use-head-unit-microphone", false)
+         set(value) {
+             prefs.edit().putBoolean("use-head-unit-microphone", value).apply()
+         }
+diff --git a/app/src/main/res/values/strings.xml b/app/src/main/res/values/strings.xml
+index 1c461c6..69150d6 100644
+--- a/app/src/main/res/values/strings.xml
++++ b/app/src/main/res/values/strings.xml
+@@ -191,7 +191,7 @@
+     <string name="video">Android Auto</string>
+     <string name="self_mode">Self Mode</string>
+     <string name="to_android_auto">To Android Auto</string>
+-    <string name="title">Open Headunit</string>
++    <string name="title">Tesla Hub Receiver (Open Headunit)</string>
+     <string name="remove">Remove</string>
+     <string name="usb">USB</string>
+     <string name="wifi">WiFi</string>
+diff --git a/build.gradle.kts b/build.gradle.kts
+index 60cf04e..4d3d82f 100644
+--- a/build.gradle.kts
++++ b/build.gradle.kts
+@@ -6,7 +6,7 @@ buildscript {
+     }
+     dependencies {
+         classpath("com.android.tools.build:gradle:8.13.2")
+-        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:2.4.20")
++        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:2.2.20")
+     }
+ }
+ 
+diff --git a/contract/src/main/java/com/andrerinas/openheadunit/contract/HeadUnitIntent.kt b/contract/src/main/java/com/andrerinas/openheadunit/contract/HeadUnitIntent.kt
+index a12d8d4..afd93e4 100644
+--- a/contract/src/main/java/com/andrerinas/openheadunit/contract/HeadUnitIntent.kt
++++ b/contract/src/main/java/com/andrerinas/openheadunit/contract/HeadUnitIntent.kt
+@@ -12,7 +12,7 @@ import android.view.KeyEvent
+  */
+ 
+ object HeadUnit {
+-    const val packageName = "com.andrerinas.headunitrevived"
++    const val packageName = "com.teslahub.receiver"
+ }
+ 
+ class KeyIntent(event: KeyEvent): Intent(action) {

@@ -166,7 +166,8 @@ object HubRuntime {
                 .put("model", Build.MODEL).put("android", Build.VERSION.RELEASE)
                 .put("sdk", Build.VERSION.SDK_INT)
                 .put("colorOs", "Unavailable through public Android API"))
-            put("androidAuto", "Not installed (Phase 3)")
+            put("androidAuto", AndroidAutoController.label())
+            put("receiver", AndroidAutoController.stateJson())
             put("stream", "Not installed (Phase 4)")
         }
     }

@@ -44,6 +44,22 @@ Version **0.2.1** implements:
 
 Select a legally compatible receiver, retain required notices, and prove same-device projection on the OPPO. Record receiver connection, negotiated video settings, and audio route. Do not begin Tesla streaming until this is stable.
 
+Current local build: **Tesla Hub 0.3.0** with a separate source-built Open Headunit receiver prototype, **3.5.0-beta4-teslahub1**, pinned at source revision `4ee1d58f6cf7f39f7dc0a6ef93509553401ec6aa` plus the recorded AGPL patch.
+
+- [x] Inspect source, public command/state interface, same-device startup, build dependencies and AGPL notices.
+- [x] Build the receiver for arm64 and install it separately as `com.teslahub.receiver` on the OPPO.
+- [x] Add native receiver start/stop/setup controls and bounded explicit-query diagnostics to Tesla Hub.
+- [x] Distinguish requested/announced settings, transport connection, and actual rendered frames; expose phone video metadata in browser diagnostics.
+- [x] Build Tesla Hub 0.3.0, pass all 22 unit tests, and install the update on the OPPO.
+- [x] Visually inspect real Android Auto/Waze on the physical OPPO and confirm actual 1280 × 720 H.264 decoded frames.
+- [x] Verify touch opens Android Auto's application drawer and native diagnostics expose fresh frame evidence.
+- [x] Verify receiver stop clears video evidence and reconnect returns actual decoded frames.
+- [x] Verify PC HTTP access through Tesla Hub's local VPN while the receiver runs, and after receiver stop.
+- [x] Owner accepts the fresh parked-car checklist as working; photos independently confirm Tesla browser access alongside live receiver decoding with no receiver error.
+- [ ] Record individually itemized media/navigation speaker routes, hands-free call behavior and exact shutdown timing during the next projection test.
+
+The OPPO has Android Auto **17.7.663654-release**. On **13 October 2026**, the owner completed setup and the agent inspected real Waze projection on the connected physical OPPO. The qualification profile is 1280 × 720, 200 DPI, H.264 and advertised 30 FPS; short renderer windows measured approximately 28–29 FPS. Two sessions, real touch, truthful disconnected diagnostics, and PC access through the active local VPN passed. The owner subsequently reported the fresh parked-car test working as expected. Tesla photos show growing rendered frames (2,588 → 2,859), fresh decoded video, local browser access and no receiver error. This accepts the Phase 3 milestone and permits its commit. Detailed audio/call/timing observations remain listed separately above; browser projection is Phase 4 work.
+
 ## Phase 4 — Tesla projection
 
 Choose transport after Tesla capability results; implement aspect-preserving 720p/30 first, then 900p and 1080p. Map touch to receiver coordinates. Measure latency, CPU, temperature, and Bluetooth audio behavior. Treat 60 FPS as experimental.

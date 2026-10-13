@@ -65,3 +65,9 @@ Hotspot control remains manual in 0.2.1. The diagnostic text explicitly says a h
 - Local EME results do not determine Vodafone TV playback at its HTTPS origin. Provider navigation, account access, DRM acceptance, and playback remain separate physical tests.
 
 No new APK or runtime behavior is introduced by recording these observations.
+
+## Phase 3 receiver coexistence — 13 October 2026
+
+The owner subsequently reported the fresh parked-car Phase 3 checklist working as expected. Two Tesla-browser photos show a fresh receiver query, video decoded on the phone at **1280 × 720 H.264/AVC**, announced **200 DPI / 30 FPS**, and rendered-frame counts **2,588** then **2,859**. Last-frame ages are **6 ms** then **23 ms**; receiver error is **None**. These observations prove a live receiver session alongside access to the local diagnostics page, not browser video playback or measured FPS.
+
+The photos identify receiver **3.5.0-beta4-teslahub1** and Android Auto **17.7.663654-release**. Stream, encoder, bitrate, browser frame rate and touch mapping are explicitly unavailable in this Phase 3 build. The configured audio sink is **5: PCM**; audible output cannot be inferred from that setting. The owner's overall checklist acceptance is recorded in [TESTING_PHASE3.md](TESTING_PHASE3.md), with individually itemized audio/call/timing observations retained for the next test.

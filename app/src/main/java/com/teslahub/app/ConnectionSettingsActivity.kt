@@ -75,7 +75,7 @@ class ConnectionSettingsActivity : Activity() {
         button(column, "Open Personal Hotspot settings") { startActivity(HotspotAssistance.settingsIntent(this)) }
         button(column, "Back to Tesla Hub") { finish() }
         column.addView(TextView(this).apply {
-            text = "Automatic mode starts the local server and Tesla connection when the selected paired car connects. Only services started automatically stop after the delay; manually started services stay running.\n\nOn this OPPO, enable the internet-sharing Personal Hotspot in phone settings. Tesla Hub does not switch it off. Android Auto is planned for Phase 3."
+            text = "Automatic mode starts the local server and Tesla connection when the selected paired car connects. Only services started automatically stop after the delay; manually started services stay running.\n\nOn this OPPO, enable the internet-sharing Personal Hotspot in phone settings. Tesla Hub does not switch it off. Android Auto receiver testing is available on the phone; Tesla browser projection follows in Phase 4."
             textSize = 15f
             setTextColor(Color.rgb(148, 160, 174))
             setPadding(0, 24, 0, 0)

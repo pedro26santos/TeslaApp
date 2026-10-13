@@ -50,6 +50,7 @@ class HubService : Service() {
         while (active.get()) {
             try {
                 val networkInfo = NetworkDiagnostics.read(this)
+                AndroidAutoController.refresh(this)
                 val found = LocalNetwork.discover(networkInfo.wifiInterfaces)
                 server.reconcile(found)
                 val bound = server.boundAddresses()

@@ -50,6 +50,7 @@ class MainActivity : Activity() {
         }
         column.addView(title)
         addButton(column, "Connection settings") { startActivity(Intent(this, ConnectionSettingsActivity::class.java)) }
+        addButton(column, "Android Auto receiver (phone test)") { startActivity(Intent(this, ReceiverActivity::class.java)) }
         addButton(column, "Start Tesla Hub") { startManualServer(); requestLocalRoute() }
         addButton(column, "Stop Tesla Hub") {
             NetworkControl.disableAutomation(this)
@@ -121,7 +122,7 @@ class MainActivity : Activity() {
             else getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("Local route test URL", url))
         }
         val note = TextView(this).apply {
-            text = "Phase 2: select your paired Tesla in Connection settings to enable automatic startup. Personal Hotspot is enabled in phone settings. Android Auto is planned for Phase 3. Keep the service notifications active."
+            text = "Select your paired Tesla in Connection settings to enable automatic server startup. Personal Hotspot is enabled in phone settings. Phase 3 tests the Android Auto receiver on the OPPO; browser projection follows in Phase 4. Keep the service notifications active."
             textSize = 14f
             setTextColor(Color.rgb(148, 160, 174))
             setPadding(0, 18, 0, 0)
@@ -179,6 +180,7 @@ class MainActivity : Activity() {
     override fun onStart() {
         super.onStart()
         val prefs = HubPreferences(this).apply { publish() }
+        AndroidAutoController.refresh(this, true)
         if (prefs.automationEnabled && !HubRuntime.automationMonitorRunning && TeslaBluetoothMonitor.hasPermission(this))
             NetworkControl.resumeMonitoring(this)
         handler.post(refresh)
@@ -218,7 +220,7 @@ class MainActivity : Activity() {
             VPN active: ${if (!HubRuntime.networkInfo.checked) "Unknown" else if (HubRuntime.networkInfo.vpnActive) "Yes" else "No"}
             Last request error: ${HubRuntime.lastRequestError ?: "None"}
             Tesla / external browser: ${if (HubRuntime.browserConnected()) "Connected" else "Disconnected"}
-            Android Auto: Not installed (Phase 3)
+            Android Auto: ${AndroidAutoController.label()}
             mDNS: ${HubRuntime.mdnsStatus}
 
             Preferred address (unverified):
