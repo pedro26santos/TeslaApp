@@ -5,6 +5,19 @@ import org.json.JSONObject
 
 object HubRuntime {
     @Volatile var serviceRunning = false
+    @Volatile var serverAutomatic = false
+    @Volatile var localRouteRunning = false
+    @Volatile var localRouteAutomatic = false
+    @Volatile var automationEnabled = false
+    @Volatile var automationMonitorRunning = false
+    @Volatile var carSelected = false
+    @Volatile var bluetoothStatus = "No Tesla selected"
+    @Volatile var automationStatus = "Disabled"
+    @Volatile var automationLastError: String? = null
+    @Volatile var shutdownRemainingSeconds: Int? = null
+    @Volatile var disconnectGraceSeconds = 60
+    @Volatile var stopOnDisconnect = true
+    @Volatile var hotspotStrategy = "User-assisted Personal Hotspot activation"
     @Volatile var serverError = "Stopped"
     @Volatile var lastRequestError: String? = null
     @Volatile var mdnsStatus = "Stopped"
@@ -133,7 +146,16 @@ object HubRuntime {
                         .put("gateways", org.json.JSONArray(link.gateways)))
                 }
             })
-            put("bluetooth", "Not configured (Phase 2)")
+            put("bluetooth", bluetoothStatus)
+            put("automation", JSONObject().put("enabled", automationEnabled)
+                .put("monitorRunning", automationMonitorRunning).put("carSelected", carSelected)
+                .put("state", automationStatus).put("graceSeconds", disconnectGraceSeconds)
+                .put("stopOnDisconnect", stopOnDisconnect)
+                .put("shutdownRemainingSeconds", shutdownRemainingSeconds ?: JSONObject.NULL)
+                .put("serverStartedAutomatically", serverAutomatic)
+                .put("localRouteStartedAutomatically", localRouteAutomatic)
+                .put("hotspotStrategy", hotspotStrategy)
+                .put("lastError", automationLastError ?: JSONObject.NULL))
             put("requestFromPhone", fromPhone)
             put("externalBrowserConnected", browserConnected())
             put("browserConnected", if (fromPhone) synchronized(browserLock) {

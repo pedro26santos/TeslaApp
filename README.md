@@ -1,6 +1,6 @@
 # Tesla Hub
 
-Tesla Hub is a local Android app and browser launcher for an OPPO phone and a Tesla connected to its hotspot. Phase 1 provides a manually started phone server, a touch-friendly Tesla browser page, and diagnostics. Android Auto projection, Bluetooth automation, and hotspot automation are future work.
+Tesla Hub is a local Android app and browser launcher for an OPPO phone and a Tesla connected to its hotspot. The local launcher passed the owner's car test in version 0.1.6. Version **0.2.1** adds opt-in Bluetooth connection automation, saved settings, and a configurable disconnect delay. On **13 October 2026**, the owner confirmed automatic startup on Bluetooth connection and shutdown after disconnect. Remaining reliability checks are in [TESTING_PHASE2.md](TESTING_PHASE2.md). Android Auto projection is Phase 3 work; hotspot activation remains user assisted on the Android 14 OPPO.
 
 ## Build
 
@@ -14,6 +14,10 @@ On macOS/Linux, run `./gradlew clean testDebugUnitTest lintDebug assembleDebug`.
 
 ## First use
 
+For the new APK's setup and automatic mode, use [TESTING_PHASE2.md](TESTING_PHASE2.md). Install **0.2.1** on the OPPO; automatic mode defaults off. **Start Tesla Hub** now starts the ordinary server and the existing local route together. **Stop Tesla Hub** stops both and disables automatic mode. **Connection settings** selects the already paired Tesla, asks for Nearby Devices/notification/VPN consent as needed, and saves the 60-second default delay. Automatic shutdown affects automatically started services; manual sessions and the manually enabled hotspot retain manual control.
+
+The following individual controls also remain available for the previously verified manual setup:
+
 1. Install the debug APK on the OPPO Find X3 Pro.
 2. Enable the phone's normal internet-sharing Wi-Fi hotspot. Tesla Hub does not toggle it in Phase 1.
 3. Open Tesla Hub and tap **Start local server**. Keep the server notification active.
@@ -26,6 +30,8 @@ Version 0.1.1 checks the HTTP response on the phone, recovers failed listeners, 
 Version 0.1.6 includes the version 0.1.4 startup crash fix, stabilizes status-screen scrolling, and uses the **experimental local route test** at the link-local address `http://169.254.77.1:8765/`. Android's VPN ingress filtering blocked the previous non-link-local address; the observed TUN packets were IPv6 controls, not HTTP requests. The route uses Android's VPN API with explicit consent and no remote VPN server. The launcher remains on the OPPO, as required by the owner. Trusted HTTPS is not configured; the tested launcher connection works over local HTTP.
 
 **Physical result on 12 October 2026:** Version 0.1.6 stayed open on the OPPO and served the launcher, assets, health check, and diagnostics to the PC on its hotspot. The owner then confirmed the launcher works in the **Tesla Model 3 browser** at `169.254.77.1:8765`; the screenshot shows all four principal buttons and **Local browser connected**. The previously reported Tesla software version is **2026.32.7**. This verifies the local launcher connection on this setup. Provider playback, Android Auto, browser capability values, and long-duration reliability still need their own tests.
+
+**Physical result on 13 October 2026:** The owner confirmed automatic Bluetooth startup and disconnect shutdown in **0.2.1**. Diagnostic photos show a normal browser viewport of **773 × 601** and a parked expanded viewport of **1256 × 706**, both with a device pixel ratio of approximately **1.53**. Media API observations and their limits are recorded in [TESLA_BROWSER_REPORT.md](TESLA_BROWSER_REPORT.md). Future display sizing must respond to the current content area rather than use one fixed viewport.
 
 The `teslahub.local` address remains an experiment. The app advertises an mDNS service but Android may assign a different host name and Tesla may not resolve mDNS. The ordinary RFC 1918 **Fallback address** worked on the OPPO and PC but was refused by this Tesla. Use the verified link-local URL above for the car. Details of the failed routes and successful fix are in [ARCHITECTURE.md](ARCHITECTURE.md).
 

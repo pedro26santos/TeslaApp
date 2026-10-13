@@ -14,3 +14,5 @@ No Phase 1 runtime dependency on these projects exists. This is an engineering l
 ## Local connection compatibility research
 
 The public [TeslaMirror Android FAQ](https://teslamirror.com/faq-android) was read for its developer's description of private-address restrictions, local VPN routing, and HTTPS requirements. The website is copyrighted by Hustmobile Inc.; no open-source license for that product is assumed. No product code, APK contents, assets, certificates, or private keys are reused. Version 0.1.2's local route prototype is original code using Android's public `VpnService` and socket APIs, guided by [Android's API documentation](https://developer.android.com/develop/connectivity/vpn). It adds no third-party runtime library or commercial dependency.
+
+Phase 2 uses original Kotlin with Android framework Bluetooth, settings, notification, and preference APIs. No new third-party runtime dependency is added. MacroDroid's public documentation was consulted for optional user setup only; no MacroDroid code, helper APK, or proprietary asset is included.

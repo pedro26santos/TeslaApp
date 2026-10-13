@@ -49,6 +49,13 @@ class MainActivity : Activity() {
             setPadding(0, 0, 0, 16)
         }
         column.addView(title)
+        addButton(column, "Connection settings") { startActivity(Intent(this, ConnectionSettingsActivity::class.java)) }
+        addButton(column, "Start Tesla Hub") { startManualServer(); requestLocalRoute() }
+        addButton(column, "Stop Tesla Hub") {
+            NetworkControl.disableAutomation(this)
+            NetworkControl.stopLocalRoute(this)
+            stopService(Intent(this, HubService::class.java))
+        }
         status = TextView(this).apply {
             textSize = 16f
             setTextColor(Color.rgb(222, 228, 235))
@@ -66,7 +73,10 @@ class MainActivity : Activity() {
                 updateStatus()
             }
         }
-        addButton(column, "Stop local server") { stopService(Intent(this, HubService::class.java)) }
+        addButton(column, "Stop local server") {
+            NetworkControl.disableAutomation(this)
+            stopService(Intent(this, HubService::class.java))
+        }
         addButton(column, "Copy fallback URL") {
             val url = HubRuntime.addresses.firstOrNull()?.url ?: return@addButton
             val clipboard = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
@@ -89,7 +99,7 @@ class MainActivity : Activity() {
             Toast.makeText(this, "Connection diagnostics copied", Toast.LENGTH_SHORT).show()
         }
         addButton(column, "Open hotspot settings") {
-            startActivity(Intent(Settings.ACTION_WIRELESS_SETTINGS))
+            startActivity(HotspotAssistance.settingsIntent(this))
         }
         addButton(column, "Start local route test (experimental)") {
             android.app.AlertDialog.Builder(this)
@@ -101,14 +111,17 @@ class MainActivity : Activity() {
                 }
                 .setNegativeButton("Cancel", null).show()
         }
-        addButton(column, "Stop local route test") { stopService(Intent(this, LocalRouteService::class.java)) }
+        addButton(column, "Stop local route test") {
+            NetworkControl.disableAutomation(this)
+            NetworkControl.stopLocalRoute(this)
+        }
         addButton(column, "Copy local route test URL") {
             val url = HubRuntime.localRouteUrl
             if (url == null) Toast.makeText(this, "Start the local route test first", Toast.LENGTH_SHORT).show()
             else getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("Local route test URL", url))
         }
         val note = TextView(this).apply {
-            text = "Phase 1: start the server manually. Android Auto and Bluetooth automation are planned for later phases. Keep the server notification active during the Tesla test."
+            text = "Phase 2: select your paired Tesla in Connection settings to enable automatic startup. Personal Hotspot is enabled in phone settings. Android Auto is planned for Phase 3. Keep the service notifications active."
             textSize = 14f
             setTextColor(Color.rgb(148, 160, 174))
             setPadding(0, 18, 0, 0)
@@ -141,6 +154,20 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun startManualServer() {
+        try { startForegroundService(Intent(this, HubService::class.java)) }
+        catch (e: Exception) { HubRuntime.serverError = "Server failed to start: ${e.javaClass.simpleName}" }
+    }
+
+    private fun requestLocalRoute() {
+        val consent = VpnService.prepare(this)
+        if (consent == null) startLocalRoute()
+        else android.app.AlertDialog.Builder(this).setTitle("Tesla local connection")
+            .setMessage("This starts the phone's local VPN address. It uses no remote VPN server. Android supports one active VPN; approving this can replace another VPN.")
+            .setPositiveButton("Continue") { _, _ -> startActivityForResult(consent, 42) }
+            .setNegativeButton("Cancel", null).show()
+    }
+
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == 42) {
@@ -151,6 +178,9 @@ class MainActivity : Activity() {
 
     override fun onStart() {
         super.onStart()
+        val prefs = HubPreferences(this).apply { publish() }
+        if (prefs.automationEnabled && !HubRuntime.automationMonitorRunning && TeslaBluetoothMonitor.hasPermission(this))
+            NetworkControl.resumeMonitoring(this)
         handler.post(refresh)
     }
 
@@ -172,10 +202,16 @@ class MainActivity : Activity() {
         }
         val statusText = """
             App version: ${BuildConfig.VERSION_NAME}
-            Tesla Bluetooth: Not configured (Phase 2)
+            Tesla address: ${HubRuntime.localRouteUrl ?: "http://${LocalRoutePolicy.ADDRESS}:8765/ (start Tesla Hub first)"}
+            Tesla Bluetooth: ${HubRuntime.bluetoothStatus}
+            Automatic connection: ${HubRuntime.automationStatus}
+            Disconnect delay: ${HubRuntime.disconnectGraceSeconds}s; remaining: ${HubRuntime.shutdownRemainingSeconds?.let { "${it}s" } ?: "None"}
+            Automation error: ${HubRuntime.automationLastError ?: "None"}
+            Hotspot control: ${HubRuntime.hotspotStrategy}
             Hotspot: ${HubRuntime.hotspotStatus}
             Local Server: $running
             Server detail: ${HubRuntime.serverError}
+            Server control: ${if (!HubRuntime.serviceRunning) "Stopped" else if (HubRuntime.serverAutomatic) "Automatic" else "Manual"}
             Phone server check:
             ${checks.ifBlank { "  Not checked" }}
             Connections from other devices: ${HubRuntime.requestSummary()}

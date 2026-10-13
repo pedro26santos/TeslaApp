@@ -6,6 +6,8 @@ import android.app.NotificationManager
 import android.content.Intent
 import android.net.VpnService
 import android.os.ParcelFileDescriptor
+import android.os.Handler
+import android.os.Looper
 import android.system.ErrnoException
 import android.system.Os
 import android.system.OsConstants
@@ -19,6 +21,8 @@ import kotlin.concurrent.thread
 class LocalRouteService : VpnService() {
     private val active = AtomicBoolean(false)
     private val stateLock = Any()
+    private val handler = Handler(Looper.getMainLooper())
+    private val generation = AtomicLong()
     private var tunnel: ParcelFileDescriptor? = null
     private var server: LocalHttpServer? = null
     private var worker: Thread? = null
@@ -32,22 +36,33 @@ class LocalRouteService : VpnService() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == NetworkControl.STOP_LOCAL_ROUTE) {
+            release()
+            HubRuntime.localRouteStatus = "Stopped"
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
+            return START_NOT_STICKY
+        }
         startForeground(2, Notification.Builder(this, "teslahub_route")
             .setContentTitle("Tesla Hub local route test")
             .setContentText("Experimental local address; no remote VPN server")
             .setSmallIcon(android.R.drawable.ic_dialog_info).setOngoing(true).build())
+        if (intent?.action != NetworkControl.AUTOMATIC) HubRuntime.localRouteAutomatic = false
         if (active.compareAndSet(false, true)) {
+            HubRuntime.localRouteRunning = true
+            HubRuntime.localRouteAutomatic = intent?.action == NetworkControl.AUTOMATIC
             packets.set(0)
             HubRuntime.localRoutePackets = 0L
             HubRuntime.localRouteLastPacket = "None"
             HubRuntime.localRouteMonitorError = null
             HubRuntime.localRouteStatus = "Starting local address test"
-            worker = thread(name = "TeslaHub-local-route", isDaemon = true) { runRoute() }
+            val session = generation.incrementAndGet()
+            worker = thread(name = "TeslaHub-local-route", isDaemon = true) { runRoute(session) }
         }
         return START_NOT_STICKY
     }
 
-    private fun runRoute() {
+    private fun runRoute(session: Long) {
         try {
             check(prepare(this) == null) { "Approve Android's VPN permission in Tesla Hub first" }
             check(NetworkInterface.getByInetAddress(LocalRoutePolicy.binding.address) == null) {
@@ -64,7 +79,7 @@ class LocalRouteService : VpnService() {
                     Intent(this, MainActivity::class.java), android.app.PendingIntent.FLAG_IMMUTABLE))
                 .establish() ?: error("Android did not create the local VPN interface")
             synchronized(stateLock) {
-                if (!active.get()) { descriptor.close(); return }
+                if (!isCurrent(session)) { descriptor.close(); return }
                 tunnel = descriptor
             }
             // The server uses kernel TCP delivery to an assigned link-local address.
@@ -94,12 +109,14 @@ class LocalRouteService : VpnService() {
                         }
                     }
                 } catch (e: Exception) {
-                    if (isCurrent(descriptor)) {
-                        val message = "${e.javaClass.simpleName}: ${e.message.orEmpty().take(150)}"
-                        HubRuntime.localRouteMonitorError = message
-                        HubRuntime.localRouteStatus = "Local route failed: $message"
-                        release()
-                        stopSelf()
+                    handler.post {
+                        if (isCurrent(session) && isCurrent(descriptor)) {
+                            val message = "${e.javaClass.simpleName}: ${e.message.orEmpty().take(150)}"
+                            HubRuntime.localRouteMonitorError = message
+                            HubRuntime.localRouteStatus = "Local route failed: $message"
+                            release()
+                            stopSelf()
+                        }
                     }
                 }
             }
@@ -109,15 +126,15 @@ class LocalRouteService : VpnService() {
                 allowClient = { remote, _ -> LocalRoutePolicy.permits(remote, LocalNetwork.discover()) }
             )
             synchronized(stateLock) {
-                if (!active.get()) { localServer.close(); return }
+                if (!isCurrent(session)) { localServer.close(); return }
                 server = localServer
             }
-            while (active.get()) {
+            while (isCurrent(session)) {
                 localServer.reconcile(listOf(LocalRoutePolicy.binding))
                 val bound = localServer.boundAddresses().isNotEmpty()
                 val result = if (bound) ServerHealthCheck.check(LocalRoutePolicy.binding) else null
                 synchronized(stateLock) {
-                    if (!active.get()) return
+                    if (!isCurrent(session)) return
                     HubRuntime.localRouteUrl = if (bound) LocalRoutePolicy.binding.url else null
                     HubRuntime.localRouteStatus = when {
                         !bound -> localServer.lastBindError ?: "Local address listener unavailable"
@@ -128,13 +145,19 @@ class LocalRouteService : VpnService() {
                 Thread.sleep(5000)
             }
         } catch (e: Exception) {
-            synchronized(stateLock) {
-                if (active.get()) HubRuntime.localRouteStatus = "Local route failed: ${e.javaClass.simpleName}: ${e.message.orEmpty().take(200)}"
+            // Stopping interrupts the old worker. Its delayed failure must never release
+            // a newly started tunnel on the same still-bound service instance.
+            handler.post {
+                if (isCurrent(session)) {
+                    HubRuntime.localRouteStatus = "Local route failed: ${e.javaClass.simpleName}: ${e.message.orEmpty().take(200)}"
+                    release()
+                    stopSelf()
+                }
             }
-            release()
-            stopSelf()
         }
     }
+
+    private fun isCurrent(session: Long): Boolean = active.get() && generation.get() == session
 
     private fun isCurrent(descriptor: ParcelFileDescriptor): Boolean = synchronized(stateLock) {
         active.get() && tunnel === descriptor
@@ -142,6 +165,7 @@ class LocalRouteService : VpnService() {
 
     private fun release() {
         active.set(false)
+        generation.incrementAndGet()
         worker?.interrupt()
         synchronized(stateLock) {
             server?.close()
@@ -149,6 +173,8 @@ class LocalRouteService : VpnService() {
             try { tunnel?.close() } catch (_: Exception) { }
             tunnel = null
             HubRuntime.localRouteUrl = null
+            HubRuntime.localRouteRunning = false
+            HubRuntime.localRouteAutomatic = false
         }
     }
 

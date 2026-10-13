@@ -36,7 +36,9 @@ class HubService : Service() {
             .setOngoing(true)
             .build()
         startForeground(1, notification)
+        if (intent?.action != NetworkControl.AUTOMATIC) HubRuntime.serverAutomatic = false
         if (active.compareAndSet(false, true)) {
+            HubRuntime.serverAutomatic = intent?.action == NetworkControl.AUTOMATIC
             HubRuntime.resetRequests()
             HubRuntime.serviceRunning = true
             worker = thread(name = "TeslaHub-network", isDaemon = true) { runServerLoop() }
@@ -132,6 +134,7 @@ class HubService : Service() {
         server.close()
         synchronized(stateLock) {
             HubRuntime.serviceRunning = false
+            HubRuntime.serverAutomatic = false
             HubRuntime.addresses = emptyList()
             HubRuntime.serverChecks = emptyList()
             HubRuntime.serverCheckedAt = 0L

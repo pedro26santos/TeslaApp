@@ -64,6 +64,7 @@
     var state = latestState || {};
     var browser = latestReport || state.browser || {};
     var phone = state.phone || {};
+    var automation = state.automation || {};
     var connected = !!state.browserConnected;
     byId('connection').textContent = connected ? 'Local browser connected' : 'Waiting for phone server';
     byId('connection').classList.toggle('online', connected);
@@ -81,7 +82,10 @@
       ['Route packets', state.localRoutePackets],
       ['Last route packet', state.localRouteLastPacket], ['Route monitor error', state.localRouteMonitorError || 'None'],
       ['Interfaces / URLs', addressRows], ['Preferred mDNS URL', state.preferredAddress],
-      ['mDNS', state.mdnsStatus], ['Tesla Bluetooth', state.bluetooth]
+      ['mDNS', state.mdnsStatus], ['Tesla Bluetooth', state.bluetooth],
+      ['Automatic connection', automation.state], ['Connection monitor', automation.monitorRunning],
+      ['Disconnect delay', automation.graceSeconds], ['Shutdown remaining', automation.shutdownRemainingSeconds],
+      ['Hotspot control', automation.hotspotStrategy], ['Automation error', automation.lastError || 'None']
     ]);
     addRows('browser-data', [
       ['Connected', connected], ['Viewport', value(browser.innerWidth) + ' × ' + value(browser.innerHeight)],

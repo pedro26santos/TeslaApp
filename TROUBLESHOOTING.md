@@ -1,5 +1,17 @@
 # Troubleshooting
 
+## Version 0.2.1 automatic connection does not start
+
+First verify the manual **Start Tesla Hub** path still works. Then follow [TESTING_PHASE2.md](TESTING_PHASE2.md). Select the car's paired phone/audio Bluetooth device, allow Nearby Devices and notifications, enable automatic mode, and approve the local VPN setup if requested. A Bluetooth LE phone-key device is not the selected classic phone/audio connection. If no monitor notification appears, open Tesla Hub or use **Resume automatic monitoring** in connection settings. Android/ColorOS may block a background start; capture the displayed automation error instead of assuming startup succeeded. Android **Force stop** prevents normal receiver delivery until the app is opened again.
+
+## Disconnect does not stop networking
+
+Check the configured delay and **Stop automatic services after disconnect**. Duplicate disconnects do not restart the delay; reconnecting cancels it. **Server control: Manual** means a manual start took control, so automatic cleanup preserves it. Use **Stop Tesla Hub** for an explicit stop, then enable automatic mode from an idle setup to test automatic ownership. The connection monitor intentionally remains active after a timed shutdown. Personal Hotspot remains on because this version did not enable it. If screen-off timing is late, record actual elapsed time and monitor presence for the OPPO scheduling test.
+
+## Hotspot does not turn on automatically
+
+On the Android 14 OPPO, this build uses user-assisted activation. Tap **Hotspot settings** on the Tesla Hub connection notification and enable internet-sharing Personal Hotspot in ColorOS. A local-only hotspot would not supply the car's normal internet services. Root and Shizuku are not required for the supported path. Optional MacroDroid setup is documented in TESTING_PHASE2.md; its hotspot action is not verified on this device.
+
 ## App closes immediately in version 0.1.4
 
 The physical OPPO crash log identified `NoSuchMethodError` from a stale `LocalHttpServer` constructor call in the APK. Install **version 0.1.6**, which includes the clean-build fix with Kotlin incremental compilation disabled. An uninstall is not required. After updating, open Tesla Hub, start the local server, and confirm it stays open and reports its phone check. If it closes again, keep USB connected so the crash buffer can be read before another rebuild; do not treat it as a hotspot-settings failure. Version 0.1.6 also avoids relayout for unchanged status text, so scrolling to the controls stays stable.
